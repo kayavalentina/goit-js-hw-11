@@ -1,93 +1,139 @@
+'use strict';
+
 import './styles.css';
+import SimpleLightbox from 'simplelightbox';
+import 'simplelightbox/dist/simple-lightbox.min.css';
 import { Notify } from 'notiflix/build/notiflix-notify-aio';
-import axios, { isCancel, AxiosError } from 'axios';
-import SlimSelect from 'slim-select'
-import 'slim-select/dist/slimselect.css';
+import axios from 'axios';
 
-// Імпортуємо бібліотеку notiflix
-import Notiflix from "notiflix";
+const searchingBox = document.querySelector('.searching-box');
+const searchQuery = document.querySelector('input[name="searchQuery"]');
+const upBtn = document.querySelector('.up-btn');
+const searchForm = document.querySelector('#search-form');
+const gallery = document.querySelector('.gallery');
+const clear = elems => [...elems.children].forEach(div => div.remove());
+const loadBtn = document.querySelector('.load-more');
+const lightbox = () => new SimpleLightbox('.gallery a', {});
+let perPage = 40;
+let page = 0;
+let name = searchQuery.value;
 
-// Функція для виконання запитів до Pixabay API та оновлення галереї
-async function fetchImages(query, page) {
-  const apiKey = 'YOUR_API_KEY'; // Замініть це на свій ключ доступу Pixabay
-  const perPage = 40; // Кількість зображень на сторінці (максимум 40)
-  const apiUrl = `https://pixabay.com/api/?key=${apiKey}&q=${query}&image_type=photo&orientation=horizontal&safesearch=true&page=${page}&per_page=${perPage}`;
+loadBtn.style.display = 'none';
+upBtn.style.display = 'none';
 
+async function fetchImages(name, page) {
   try {
-    const response = await fetch(apiUrl);
-    const data = await response.json();
-
-    if (data.hits.length === 0) {
-      Notiflix.Notify.failure("Sorry, there are no images matching your search query. Please try again.");
-    } else {
-      Notiflix.Notify.success(`Hooray! We found ${data.totalHits} images.`);
-      renderImages(data.hits);
-    }
+    const response = await axios.get(
+      `https://pixabay.com/api/?key=39743312-4508a0e311c8ff0ec9a823a0a=${name}&image_type=photo&orientation=horizontal&safesearch=true&page=${page}&per_page=${perPage}`,
+    );
+    console.log(response);
+    return response.data;
   } catch (error) {
-    console.error('Error fetching images:', error);
-    Notiflix.Notify.failure('An error occurred while fetching images. Please try again later.');
+    console.log(error);
   }
 }
 
-// Функція для відображення зображень у галереї
-function renderImages(images) {
-  const gallery = document.querySelector('.gallery');
-  
-  // Очищаємо галерею перед додаванням нових зображень
-  gallery.innerHTML = '';
+async function eventHandler(ev) {
+  ev.preventDefault();
+  clear(gallery);
+  loadBtn.style.display = 'none';
+  page = 1;
+  name = searchQuery.value;
+  console.log(name);
+  fetchImages(name, page)
+    .then(name => {
+      console.log(`Number of arrays: ${name.hits.length}`);
+      console.log(`Total hits: ${name.totalHits}`);
+      let totalPages = Math.ceil(name.totalHits / perPage);
+      console.log(`Total pages: ${totalPages}`);
 
-  images.forEach(image => {
-    const photoCard = document.createElement('div');
-    photoCard.classList.add('photo-card');
+      if (name.hits.length > 0) {
+        Notiflix.Notify.success(`Hooray! We found ${name.totalHits} images.`);
+        renderGallery(name);
+        console.log(`Current page: ${page}`);
+        lightbox();
+        //const lightbox = new SimpleLightbox('.gallery a', {});
+        //smooth scrool to up
+        upBtn.style.display = 'block';
+        upBtn.addEventListener('click', () => {
+          searchingBox.scrollIntoView({
+            behavior: 'smooth',
+          });
+        });
 
-    const img = document.createElement('img');
-    img.src = image.webformatURL;
-    img.alt = image.tags;
-    img.loading = 'lazy';
-
-    const info = document.createElement('div');
-    info.classList.add('info');
-
-    const likes = createInfoItem('Likes', image.likes);
-    const views = createInfoItem('Views', image.views);
-    const comments = createInfoItem('Comments', image.comments);
-    const downloads = createInfoItem('Downloads', image.downloads);
-
-    info.appendChild(likes);
-    info.appendChild(views);
-    info.appendChild(comments);
-    info.appendChild(downloads);
-
-    photoCard.appendChild(img);
-    photoCard.appendChild(info);
-
-    gallery.appendChild(photoCard);
-  });
+        if (page < totalPages) {
+          loadBtn.style.display = 'block';
+        } else {
+          loadBtn.style.display = 'none';
+          console.log('There are no more images');
+          Notiflix.Notify.info("We're sorry, but you've reached the end of search results.");
+        }
+      } else {
+        Notiflix.Notify.failure(
+          'Sorry, there are no images matching your search query. Please try again.',
+        );
+        clear(gallery); //reset view in case of failure
+      }
+    })
+    .catch(error => console.log(error));
 }
 
-// Функція для створення елементу інформації
-function createInfoItem(label, value) {
-  const infoItem = document.createElement('p');
-  infoItem.classList.add('info-item');
-  infoItem.innerHTML = `<b>${label}:</b> ${value}`;
-  return infoItem;
+searchForm.addEventListener('submit', eventHandler);
+
+function renderGallery(name) {
+  const markup = name.hits
+    .map(hit => {
+      return `<div class="photo-card">
+      <a class="gallery__item" href="${hit.largeImageURL}"> <img class="gallery__image" src="${hit.webformatURL}" alt="${hit.tags}" loading="lazy" /></a>
+      <div class="info">
+        <p class="info-item">
+          <p><b>Likes</b> <br>${hit.likes}</br></p>
+        </p>
+        <p class="info-item">
+          <p><b>Views</b> <br>${hit.views}</br></p>
+        </p>
+        <p class="info-item">
+          <p><b>Comments</b> <br>${hit.comments}</br></p>
+        </p>
+        <p class="info-item">
+          <p><b>Downloads</b> <br>${hit.downloads}</br></p>
+        </p>
+      </div>
+    </div>`;
+    })
+    .join('');
+  gallery.insertAdjacentHTML('beforeend', markup);
 }
 
-// Обробник події для форми пошуку
-document.querySelector('.search-form').addEventListener('submit', function (event) {
-  event.preventDefault();
-  const searchQuery = event.target.searchQuery.value.trim();
-  if (searchQuery) {
-    currentPage = 1; // Скидаємо поточну сторінку до першої при новому пошуку
-    fetchImages(searchQuery, currentPage);
-  }
-});
+loadBtn.addEventListener(
+  'click',
+  () => {
+    name = searchQuery.value;
+    console.log('load more images');
+    page += 1;
+    fetchImages(name, page).then(name => {
+      let totalPages = Math.ceil(name.totalHits / perPage);
+      renderGallery(name);
+      //smooth scroll
+      const { height: cardHeight } = document
+        .querySelector('.gallery')
+        .firstElementChild.getBoundingClientRect();
 
-// Обробник події для кнопки "Load more"
-document.querySelector('.load-more').addEventListener('click', function () {
-  const searchQuery = document.querySelector('.search-form input[name="searchQuery"]').value.trim();
-  if (searchQuery) {
-    currentPage++; // Збільшуємо поточну сторінку при завантаженні наступної групи зображень
-    fetchImages(searchQuery, currentPage);
-  }
-});
+      window.scrollBy({
+        top: cardHeight * 2,
+        behavior: 'smooth',
+      });
+      //===
+      lightbox().refresh();
+      console.log(`Current page: ${page}`);
+
+      if (page >= totalPages) {
+        loadBtn.style.display = 'none';
+        console.log('There are no more images');
+        Notiflix.Notify.info("We're sorry, but you've reached the end of search results.");
+      }
+    });
+    //console.log("Load more button clicked");
+  },
+  true,
+);
