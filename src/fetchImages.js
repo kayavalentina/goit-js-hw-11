@@ -1,7 +1,6 @@
 import axios from 'axios';
 export { fetchImages };
-
-// Встановлення значення ключа API
+  
 const API_KEY = '39743312-4508a0e311c8ff0ec9a823a0a';
 const API_URL = 'https://pixabay.com/api/';
 
